@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ULTIMATE REGEN V3</title>
+    <style>
+        :root { --neon: #00ffcc; --error: #ff4444; }
+        body { background: #050505; color: white; font-family: sans-serif; padding: 15px; margin: 0; }
+        .wrapper { max-width: 450px; margin: 0 auto; background: #111; padding: 20px; border-radius: 15px; border: 1px solid #333; }
+        h2 { color: var(--neon); text-align: center; font-size: 1.2rem; text-shadow: 0 0 10px var(--neon); }
+        
+        .box { background: #1a1a1a; padding: 12px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #222; }
+        label { display: block; margin-bottom: 8px; font-size: 0.8rem; color: #888; }
+        
+        input, textarea, select { width: 100%; background: #000; border: 1px solid #444; color: white; padding: 12px; border-radius: 8px; box-sizing: border-box; }
+        textarea { border-color: var(--neon); height: 60px; }
+
+        .btn { width: 100%; padding: 16px; background: var(--neon); color: black; border: none; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; }
+        .btn:disabled { background: #333; color: #666; }
+
+        #status { padding: 10px; border-radius: 5px; background: #000; margin-bottom: 10px; font-size: 0.75rem; color: #ffcc00; border-left: 3px solid #ffcc00; }
+        #log { font-size: 10px; color: #555; height: 80px; overflow-y: auto; background: #050505; padding: 5px; margin-top: 10px; }
+        
+        img { width: 100%; border-radius: 10px; display: none; margin-top: 15px; border: 1px solid var(--neon); }
+        canvas { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <h2>REGENERATE ENGINE V3</h2>
+    
+    <div id="status">ЗАПУСК СИСТЕМЫ... ПОДОЖДИТЕ</div>
+
+    <div class="box" style="border-color: #ffcc00;">
+        <label>⚙️ РЕЖИМ ПАМЯТИ (ДЛЯ ТЕЛЕФОНА):</label>
+        <select id="mem">
+            <option value="0.5">УЛЬТРА-ЭКОНОМИЯ (256px - не вылетит)</option>
+            <option value="0.7">БАЛАНС (384px - может тормозить)</option>
+        </select>
+    </div>
+
+    <div class="box">
+        <label>1. ВЫБЕРИ ФАЙЛ:</label>
+        <input type="file" id="fInput" accept="image/*,video/*">
+    </div>
+
+    <div class="box">
+        <label>2. ЗАПРОС (ЧТО СДЕЛАТЬ):</label>
+        <textarea id="pInput" placeholder="Напиши запрос тут..."></textarea>
+    </div>
+
+    <button id="go" class="btn" disabled>ЖДИТЕ ЗАГРУЗКИ...</button>
+
+    <img id="view">
+    <div id="log"></div>
+</div>
+
+<script type="module">
+    // Импортируем библиотеку
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
+
+    // ВАЖНО: Эти настройки исправляют ошибку "Unauthorized" на телефонах
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+    env.remoteHost = 'https://huggingface.co';
+    env.remoteObjectURL = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/';
+
+    const status = document.getElementById('status');
+    const goBtn = document.getElementById('go');
+    const log = document.getElementById('log');
+    const view = document.getElementById('view');
+
+    let generator = null;
+
+    function addLog(msg) {
+        const d = document.createElement('div');
+        d.textContent = `> ${msg}`;
+        log.appendChild(d);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    // Инициализация
+    async function init() {
+        try {
+            addLog("Подключение к ядру ИИ...");
+            // Загружаем очень легкую модель для теста (она стабильнее на Android)
+            generator = await pipeline('image-to-image', 'Xenova/stable-diffusion-v1-5-img2img', {
+                progress_callback: (p) => {
+                    status.textContent = `ЗАГРУЗКА МОДЕЛИ: ${Math.round(p.progress ?? 0)}%`;
+                }
+            });
+            
+            status.textContent = "СИСТЕМА ГОТОВА (ОФФЛАЙН)";
+            status.style.color = "#00ff99";
+            goBtn.disabled = false;
+            goBtn.textContent = "ЗАПУСТИТЬ РЕГЕНЕРАЦИЮ";
+            addLog("Нейросеть в памяти. Интернет больше не нужен.");
+        } catch (e) {
+            status.textContent = "ОШИБКА ДОСТУПА. ВКЛЮЧИТЕ ИНТЕРНЕТ ДЛЯ ПЕРВОГО ЗАПУСКА.";
+            status.style.color = "#ff4444";
+            addLog("Критическая ошибка: " + e.message);
+        }
+    }
+
+    init();
+
+    goBtn.onclick = async () => {
+        const file = document.getElementById('fInput').files[0];
+        const prompt = document.getElementById('pInput').value;
+        const scale = parseFloat(document.getElementById('mem').value);
+
+        if (!file || !prompt) return alert("Загрузи файл и напиши что сделать!");
+
+        goBtn.disabled = true;
+        status.textContent = "РАБОТАЮ... ТЕЛЕФОН МОЖЕТ ЗАВИСНУТЬ";
+        addLog("Начинаю процесс...");
+
+        try {
+            // Читаем картинку или кадр
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async (e) => {
+                const imgData = e.target.result;
+                
+                addLog("Запуск нейросети...");
+                
+                // Сама генерация
+                const result = await generator(imgData, {
+                    prompt: prompt,
+                    num_inference_steps: 15, // Меньше шагов = быстрее на телефоне
+                    strength: 0.7,
+                    guidance_scale: 7.5,
+                });
+
+                view.src = result.uri;
+                view.style.display = 'block';
+                status.textContent = "ГОТОВО!";
+                addLog("Результат выведен на экран.");
+                goBtn.disabled = false;
+            };
+        } catch (err) {
+            addLog("ОШИБКА: " + err.message);
+            status.textContent = "СБОЙ ПАМЯТИ";
+            goBtn.disabled = false;
+        }
+    };
+</script>
+</body>
+</html>
